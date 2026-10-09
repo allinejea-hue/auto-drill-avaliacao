@@ -1,5 +1,7 @@
 import io
 import re
+import hashlib
+import unicodedata
 import pandas as pd
 import streamlit as st
 from evaluation_engine import evaluate_operator, DEFAULT_WEIGHTS
@@ -10,35 +12,70 @@ st.title("Avaliação de Aderência à Utilização do Auto Drill")
 st.caption("Importe a planilha exportada do Microsoft Forms. O sistema calcula aderência, coerência técnico-comportamental e apresenta os achados por operador.")
 
 
+def normalize_header(value):
+    text = unicodedata.normalize("NFKD", str(value))
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = re.sub(r"auto[\s_-]*drill", "auto drill", text.lower())
+    return re.sub(r"[^a-z0-9]+", " ", text).strip()
+
+
 def find_col(columns, needles):
-    for c in columns:
-        cc = str(c).lower().replace("\n", " ")
-        if all(n.lower() in cc for n in needles):
-            return c
-    return None
+    # Ignore question numbering: Forms titles can be renumbered.
+    terms = [normalize_header(n) for n in needles if not normalize_header(n).isdigit()]
+    matches = [c for c in columns if all(n in normalize_header(c) for n in terms)]
+    # Ambiguous matches must be resolved by the user, never by column order.
+    return matches[0] if len(matches) == 1 else None
+
+
+COLUMN_PATTERNS = {
+    "nome": [["nome completo"], ["nome"]],
+    "q1": [["modo", "perfura"]],
+    "q2": [["emboque", "prefer"], ["embocamento", "prefer"], ["2.", "emboque"]],
+    "q3": [["por que", "emboque"], ["porque", "emboque"], ["justific", "emboque"], ["por que", "embocamento"]],
+    "q4": [["maior chance", "desvio"]],
+    "q5": [["apos", "estabiliza"]],
+    "q6": [["taxa de penetracao"]],
+    "q7": [["torque"]],
+    "q8": [["modo manual"]],
+    "q9": [["comportamento", "auto drill", "desvio"]],
+    "q10": [["utilizar", "auto drill"]],
+    "q11": [["evita", "auto drill"]],
+    "q12": [["se respondeu", "condicao"]],
+    "q13": [["aumentar", "confianca"]],
+    "freq_manual": [["10 furos", "manual"]],
+    "q14": [["pontos positivos", "negativos"]],
+    "q15": [["mudar ou melhorar"]],
+}
+
+COLUMN_LABELS = {
+    "nome": "Nome do operador", "q1": "Preferência de perfuração",
+    "q2": "Preferência de emboque", "q3": "Justificativa do emboque",
+    "q4": "Maior chance de desvio", "q5": "Após estabilização",
+    "q6": "Taxa de penetração", "q7": "Controle de torque",
+    "q8": "Modo manual", "q9": "Auto Drill diante de desvio",
+    "q10": "Benefícios de utilizar Auto Drill", "q11": "Evita Auto Drill",
+    "q12": "Condição para evitar Auto Drill", "q13": "Aumentar confiança",
+    "freq_manual": "Frequência manual em 10 furos (opcional)",
+    "q14": "Pontos positivos e negativos", "q15": "O que mudar ou melhorar",
+}
 
 
 def map_columns(df):
-    cols = list(df.columns)
-    return {
-        "nome": find_col(cols, ["nome completo"]) or find_col(cols, ["nome"]),
-        "q1": find_col(cols, ["1.", "modo", "perfura"]),
-        "q2": find_col(cols, ["2.", "emboque"]),
-        "q3": find_col(cols, ["3.", "por que", "emboque"]),
-        "q4": find_col(cols, ["maior chance", "desvio"]),
-        "q5": find_col(cols, ["4.", "apos", "estabilizacao"]) or find_col(cols, ["4.", "estabiliza"]),
-        "q6": find_col(cols, ["5.", "taxa de penetracao"]),
-        "q7": find_col(cols, ["6.", "torque"]),
-        "q8": find_col(cols, ["7.", "modo manual"]),
-        "q9": find_col(cols, ["comportamento do auto drill", "desvio"]),
-        "q10": find_col(cols, ["8.", "utilizar o auto drill"]),
-        "q11": find_col(cols, ["9.", "evita utilizar o auto drill"]),
-        "q12": find_col(cols, ["se respondeu", "condicao"]),
-        "q13": find_col(cols, ["11.", "aumentar sua confianca"]),
-        "freq_manual": find_col(cols, ["10 furos", "manual"]),
-        "q14": find_col(cols, ["12.", "pontos positivos", "negativos"]),
-        "q15": find_col(cols, ["mudar ou melhorar"]),
-    }
+    mapping = {}
+    for key, alternatives in COLUMN_PATTERNS.items():
+        mapping[key] = None
+        for terms in alternatives:
+            candidate = find_col(df.columns, terms)
+            if candidate is not None:
+                mapping[key] = candidate
+                break
+    # A column cannot represent two different questions.
+    for column in list(df.columns):
+        keys = [key for key, value in mapping.items() if value == column]
+        if len(keys) > 1:
+            for key in keys:
+                mapping[key] = None
+    return mapping
 
 
 def record_from_row(row, mapping):
@@ -75,12 +112,39 @@ if uploaded:
         st.error(f"Não foi possível ler a planilha: {e}")
         st.stop()
 
-    mapping = map_columns(df)
-    missing = [k for k, v in mapping.items() if v is None and k not in ["freq_manual"]]
+    if not df.columns.is_unique:
+        st.error("Há títulos de colunas duplicados. Diferencie os títulos na planilha e importe novamente.")
+        st.stop()
+
+    detected = map_columns(df)
+    signature = hashlib.sha256(uploaded.getvalue()).hexdigest()[:16]
+    with st.expander("Conferir e corrigir identificação das perguntas", expanded=True):
+        st.write("Confira o título completo de cada pergunta. Selecione a coluna correta quando necessário. Os códigos q1–q15 são internos e podem diferir da numeração do Forms.")
+        mapping = {}
+        options = [None] + list(df.columns)
+        for key, candidate in detected.items():
+            mapping[key] = st.selectbox(
+                COLUMN_LABELS[key], options,
+                index=options.index(candidate),
+                format_func=lambda value: "— Selecione uma coluna —" if value is None else str(value),
+                key=f"mapping_{signature}_{key}",
+            )
+        confirmed = st.checkbox("Conferi a correspondência entre as perguntas e as colunas", key=f"confirmed_{signature}")
+
+    missing = [key for key, value in mapping.items() if value is None and key != "freq_manual"]
+    assigned = [value for value in mapping.values() if value is not None]
     if missing:
-        st.warning("Algumas colunas não foram identificadas automaticamente: " + ", ".join(missing))
-        with st.expander("Ver mapeamento detectado"):
-            st.json({k: str(v) for k, v in mapping.items()})
+        st.error("Identifique as perguntas antes de calcular: " + ", ".join(COLUMN_LABELS[key] for key in missing))
+        st.stop()
+    if len(assigned) != len(set(assigned)):
+        st.error("Uma coluna foi selecionada para mais de uma pergunta. Corrija a correspondência antes de calcular.")
+        st.stop()
+    if not confirmed:
+        st.info("Confirme a correspondência das perguntas para liberar a avaliação.")
+        st.stop()
+    if sum(weights.values()) <= 0:
+        st.error("Defina pelo menos um peso maior que zero antes de calcular.")
+        st.stop()
 
     results = []
     for _, row in df.iterrows():
