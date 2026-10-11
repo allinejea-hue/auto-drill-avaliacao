@@ -12,7 +12,7 @@ banner_path = Path(__file__).resolve().parent / 'banner_auto_drill.png'
 if banner_path.is_file():
     st.image(str(banner_path), use_container_width=True)
 
-st.title('Avaliação de Aderência à Utilização do Auto Drill')
+#st.title('Avaliação de Aderência à Utilização do Auto Drill')
 st.caption('Importe a planilha exportada do Microsoft Forms. O sistema calcula aderência, coerência técnico-comportamental e apresenta os achados por operador.')
 
 def normalize_header(value):
