@@ -6,6 +6,12 @@ import streamlit as st
 from evaluation_engine import evaluate_operator, DEFAULT_WEIGHTS
 
 st.set_page_config(page_title='Avaliação Auto Drill', page_icon='⚙️', layout='wide')
+# Banner visual opcional: a ausência da imagem não impede a avaliação.
+from pathlib import Path
+banner_path = Path(__file__).resolve().parent / 'banner_auto_drill.png'
+if banner_path.is_file():
+    st.image(str(banner_path), use_container_width=True)
+
 st.title('Avaliação de Aderência à Utilização do Auto Drill')
 st.caption('Importe a planilha exportada do Microsoft Forms. O sistema calcula aderência, coerência técnico-comportamental e apresenta os achados por operador.')
 
