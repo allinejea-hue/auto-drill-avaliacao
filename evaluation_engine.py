@@ -366,7 +366,7 @@ def evaluate_coherence(r: Dict[str,Any]) -> Tuple[float,List[Finding]]:
 def evaluate_operator(record: Dict[str,Any], weights=None) -> Dict[str,Any]:
     adherence, adherence_details = evaluate_adherence(record,weights=weights)
     coherence, findings = evaluate_coherence(record)
-    return {
+    result = {
         'nome':record.get('nome','Operador'),
         'aderencia':adherence,
         'classificacao_aderencia':classify_adherence(adherence),
@@ -376,3 +376,59 @@ def evaluate_operator(record: Dict[str,Any], weights=None) -> Dict[str,Any]:
         'coerencia_detalhes':[asdict(f) for f in findings],
         'diagnostico_melhoria':q15_diagnostic(record.get('q15','')),
     }
+    result.update(classify_recognition(record, result))
+    return result
+
+
+def classify_recognition(record, evaluation):
+    """Eligibility is separate from scores; no quota and no inference of dishonesty."""
+    contradictions, gaps, technical = [], [], []
+    for finding in evaluation['coerencia_detalhes']:
+        if finding['severity'] != 'alta':
+            continue
+        title = finding['title']
+        if title in ('Preferência x frequência incompatíveis',
+                     'Declarações incompatíveis', 'Conhecimento x prática em conflito',
+                     'Conhece o risco, mas prioriza velocidade'):
+            contradictions.append(finding['area'] + ': ' + finding['explanation'])
+        elif title in ('Resposta ausente', 'Justificativa ausente'):
+            gaps.append(finding['area'] + ': ' + finding['explanation'])
+        else:
+            technical.append(finding['area'] + ': ' + finding['explanation'])
+    required = ['q1', 'q2', 'q3', 'q4', 'q5', 'q7', 'q9', 'q10', 'q11', 'freq_manual']
+    missing = [key for key in required if not norm(record.get(key))]
+    if missing:
+        gaps.append('Respostas essenciais ausentes: ' + ', '.join(missing))
+    q9 = next(f for f in evaluation['coerencia_detalhes'] if f['area'] == 'Q9 – Desvio')
+    if 0 < q9['score'] < q9['max_score']:
+        gaps.append('Desvio: confirmar comportamento do sistema e ação diante de desvio confirmado.')
+    if manual_frequency_bucket(record.get('freq_manual', '')) is None:
+        gaps.append('Frequência manual não interpretável; conferir preenchimento.')
+    bucket = manual_frequency_bucket(record.get('freq_manual', ''))
+    if bucket and not (0 <= bucket[0] <= bucket[1] <= 10):
+        gaps.append('Frequência manual fora do intervalo de zero a dez furos.')
+    reasons = contradictions + technical + gaps
+    if contradictions:
+        status = 'Não elegível nesta avaliação'
+        consistency = 'Inconsistência identificada'
+    elif technical:
+        status = 'Não elegível nesta avaliação'
+        consistency = 'Sem contradição relevante identificada'
+    elif evaluation['aderencia'] < 80:
+        status = 'Não elegível nesta avaliação'
+        consistency = 'Validação pendente' if gaps else 'Sem contradição relevante identificada'
+        reasons.append('Aderência abaixo de 80%.')
+    elif gaps:
+        status = 'Precisa de validação'
+        consistency = 'Validação pendente'
+    elif evaluation['coerencia'] < 80:
+        status = 'Precisa de validação'
+        consistency = 'Sem contradição relevante identificada'
+        reasons.append('Coerência abaixo de 80%; revisar achados antes do reconhecimento.')
+    else:
+        status = 'Elegível para reconhecimento'
+        consistency = 'Sem contradição relevante identificada'
+        reasons.append('Aderência e coerência ≥80%, sem bloqueios nos cruzamentos avaliados.')
+    return {'classificacao_reconhecimento': status, 'consistencia_respostas': consistency,
+            'motivos_reconhecimento': reasons, 'contradicoes_reconhecimento': contradictions,
+            'lacunas_tecnicas_reconhecimento': technical, 'pendencias_reconhecimento': gaps}
