@@ -29,16 +29,16 @@ def find_col(columns, needles):
 
 COLUMN_PATTERNS = {
     "nome": [["nome completo"], ["nome"]],
-    "q1": [["modo", "perfura"]],
-    "q2": [["emboque", "prefer"], ["embocamento", "prefer"], ["2.", "emboque"]],
+    "q1": [["qual modo", "prefere", "durante a perfuracao"]],
+    "q2": [["qual modo", "prefere", "durante o emboque"], ["qual modo", "prefere", "embocamento"]],
     "q3": [["por que", "emboque"], ["porque", "emboque"], ["justific", "emboque"], ["por que", "embocamento"]],
     "q4": [["maior chance", "desvio"]],
     "q5": [["apos", "estabiliza"]],
-    "q6": [["taxa de penetracao"]],
-    "q7": [["torque"]],
-    "q8": [["modo manual"]],
+    "q6": [["qual modo", "melhor taxa de penetracao"]],
+    "q7": [["qual modo", "controlar", "torque"]],
+    "q8": [["influencia", "decisao", "utilizar", "modo manual"]],
     "q9": [["comportamento", "auto drill", "desvio"]],
-    "q10": [["utilizar", "auto drill"]],
+    "q10": [["influencia", "decisao", "utilizar", "auto drill"]],
     "q11": [["evita", "auto drill"]],
     "q12": [["se respondeu", "condicao"]],
     "q13": [["aumentar", "confianca"]],
@@ -117,7 +117,7 @@ if uploaded:
         st.stop()
 
     detected = map_columns(df)
-    signature = hashlib.sha256(uploaded.getvalue()).hexdigest()[:16]
+    signature = 'mapping_v2_' + hashlib.sha256(uploaded.getvalue()).hexdigest()[:16]
     with st.expander("Conferir e corrigir identificação das perguntas", expanded=True):
         st.write("Confira o título completo de cada pergunta. Selecione a coluna correta quando necessário. Os códigos q1–q15 são internos e podem diferir da numeração do Forms.")
         mapping = {}
