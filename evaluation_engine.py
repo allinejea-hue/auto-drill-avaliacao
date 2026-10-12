@@ -207,6 +207,15 @@ def evaluate_q9_technical(answer: str) -> Finding:
         'interrompe o automatico', 'autoajuste', 'auto ajuste',
         'tenta ajustar', 'ajust', 'torque aumenta', 'perde taxa',
         'perda de taxa', 'perde penetracao'])
+    # Na pergunta sobre desvio, o operador pode reconhecer sinais e agir
+    # preventivamente. A entrega do controle não é um requisito.
+    operator_signals = bool(re.search(
+        r'(?:perd\w*|redu\w*|diminu\w*|cai\w*|queda).{0,25}taxa'
+        r'|taxa.{0,25}(?:cai\w*|redu\w*|diminu\w*)', a)) or contains_any(a, [
+            'forcando o equipamento', 'forcando a maquina', 'esforco excessivo',
+            'haste entorta', 'haste torta', 'haste empen', 'empenamento',
+            'agarramento', 'agarra a haste', 'haste agarr', 'haste trav',
+            'torque elevado', 'aumento de torque', 'aumento do torque'])
     abandonment = contains_any(a, [
         'mudar de furo', 'mudo de furo', 'trocar de furo', 'troco de furo',
         'outro furo', 'novo furo', 'refazer o furo', 'abandonar o furo',
@@ -230,9 +239,9 @@ def evaluate_q9_technical(answer: str) -> Finding:
         return Finding(area, 'media', 'Conhecimento parcial — decisão condicionada',
             'Cita abandonar o furo, mas condiciona a decisão à litologia sem deixar inequívoca a conduta diante do desvio confirmado.', 1, 2)
 
-    if abandonment and (mentions_deviation or system):
+    if abandonment and (mentions_deviation or system or operator_signals):
         return Finding(area, 'nenhuma', 'Decisão adequada diante do desvio',
-            'Reconhece o desvio ou a entrega do controle e decide abandonar o furo para iniciar outro. Deve seguir os procedimentos de segurança.', 2, 2)
+            'Reconhece o desvio, sinais operacionais ou a entrega do controle e decide abandonar/refazer o furo. Pode agir preventivamente, sem esperar a entrega. Sinais isolados não comprovam desvio; deve seguir os procedimentos de segurança.', 2, 2)
     if system and stop:
         return Finding(area, 'media', 'Conhecimento parcial — interrupção indicada',
             'Reconhece o comportamento do sistema e indica interromper/avaliar, mas não esclarece a decisão após confirmação do desvio.', 1, 2)
