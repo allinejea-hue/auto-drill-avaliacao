@@ -108,6 +108,27 @@ def q12_technical(q11: str, q12: str) -> Finding:
                                   'terreno instavel', 'material instavel'])
     valid_failure = failure and not amp_only and (auto_specific or contains_any(a, [
         'sensor', 'calibr', 'sistema de perfuracao', 'indisponibilidade do automatico']))
+    # Intervenção para liberar/retirar a coluna é distinta de continuar furando.
+    stuck = contains_any(a, ['agarr', 'travamento', 'haste presa', 'coluna presa']) or bool(
+        re.search(r'(?:haste|coluna).{0,15}(?:presa|travada)', a))
+    release = contains_any(a, ['desagarr', 'destrav', 'liberar a haste',
+        'liberar a coluna', 'retirar a haste', 'retirar as hastes', 'retirar hastes',
+        'retirar a coluna', 'recolher a coluna'])
+    unsafe_continuation = evaluate_q9_technical(q12).title == 'Conduta inadequada diante do desvio'
+    if unsafe_continuation:
+        return Finding(area, 'alta', 'Continuação de perfuração diante de desvio',
+            'A justificativa declara continuar perfurando manualmente diante de desvio, em vez de limitar a intervenção à liberação/retirada da coluna.', 0, 2)
+    calibration_hole = contains_any(a, ['calibr']) and contains_any(a, [
+        'furo', 'furar', 'perfur']) and contains_any(a, ['coluna', 'cabeca rotativa'])
+    if calibration_hole and not amp_only:
+        return Finding(area, 'nenhuma', 'Furo manual para calibragem',
+            'Descreve furo em modo Manual necessário à calibragem da coluna ou cabeça rotativa. É uma exceção técnica aceita, conforme o procedimento de calibragem, e não indica falta de aderência ao Auto Drill.', 2, 2)
+    if contains_any(a, ['calibr']) and contains_any(a, ['furo', 'furar', 'perfur']) and not amp_only:
+        return Finding(area, 'media', 'Calibragem não especificada — revisar',
+            'Cita furo para calibragem, mas não identifica a coluna ou cabeça rotativa. Confirmar o procedimento referido.', 1, 2)
+    if stuck and release and not amp_only:
+        return Finding(area, 'nenhuma', 'Intervenção manual para liberar a coluna',
+            'Descreve intervenção para desagarrar ou retirar a haste/coluna. Não exige falha nem entrega do controle pelo Auto Drill e não indica, por si só, falta de aderência. A intervenção deve seguir o procedimento operacional; não autoriza continuar perfurando um furo com desvio confirmado.', 2, 2)
     if speed and valid_failure:
         return Finding(area, 'media', 'Justificativas mistas — revisar',
             'Cita falha do Auto Drill e aumento de produtividade manual. É necessário confirmar a razão real da desativação.', 1, 2)
