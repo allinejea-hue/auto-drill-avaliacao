@@ -200,6 +200,34 @@ if uploaded:
     st.download_button("Baixar elegíveis em CSV", eligible.to_csv(index=False).encode("utf-8-sig"),
                        file_name="elegiveis_reconhecimento_auto_drill.csv", mime="text/csv")
 
+    # Ranking complementar: os oito menores resultados de aderência.
+    # Não modifica notas, regras de coerência nem elegibilidade para reconhecimento.
+    st.subheader("8 operadores com menor aderência ao Auto Drill")
+    st.caption(
+        "Lista ordenada pela menor pontuação de aderência. A coerência é exibida "
+        "separadamente e não altera a posição neste ranking. "
+        "Este resultado indica prioridades de acompanhamento, não comprova desempenho em campo."
+    )
+    least_adherent = (
+        summary.sort_values(
+            ["Aderência (%)", "Coerência (%)", "Operador"],
+            ascending=[True, True, True],
+            kind="stable",
+        )
+        .head(8)
+        .copy()
+    )
+    if least_adherent.empty:
+        st.info("Nenhum operador disponível para esta classificação.")
+    else:
+        st.dataframe(least_adherent, use_container_width=True, hide_index=True)
+        st.download_button(
+            "Baixar 8 menos aderentes em CSV",
+            least_adherent.to_csv(index=False).encode("utf-8-sig"),
+            file_name="8_menos_aderentes_auto_drill.csv",
+            mime="text/csv",
+        )
+
     st.divider()
     selected = st.selectbox("Selecione um operador para análise detalhada", [r["nome"] for r in results])
     r = next(x for x in results if x["nome"] == selected)
