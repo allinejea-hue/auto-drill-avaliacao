@@ -197,10 +197,18 @@ if uploaded:
     chart_df["Faixa de cor"] = chart_df.apply(
         lambda linha: cor_indicador(linha["Indicador"], linha["Pontuação (%)"]), axis=1
     )
-    st.caption(
-        "Aderência: verde ≥80%, laranja >50% e <80%, vermelho ≤50%. "
-        "Coerência: azul ≥80%, amarelo >50% e <80%, vermelho-escuro ≤50%. "
-        "Role horizontalmente para visualizar todos os operadores."
+    # Legenda independente, acima e à esquerda do gráfico, fora da área das barras.
+    st.markdown(
+        """<div style="display:flex;flex-wrap:wrap;column-gap:18px;row-gap:8px;
+        align-items:center;justify-content:flex-start;margin:10px 0 14px 0;font-size:13px;">
+          <span style="white-space:nowrap;"><span style="display:inline-block;background:#159B54;width:12px;height:12px;margin-right:6px;border-radius:2px;"></span>Aderência ≥80%</span>
+          <span style="white-space:nowrap;"><span style="display:inline-block;background:#F39C12;width:12px;height:12px;margin-right:6px;border-radius:2px;"></span>Aderência 51–79%</span>
+          <span style="white-space:nowrap;"><span style="display:inline-block;background:#E53935;width:12px;height:12px;margin-right:6px;border-radius:2px;"></span>Aderência ≤50%</span>
+          <span style="white-space:nowrap;"><span style="display:inline-block;background:#278BDE;width:12px;height:12px;margin-right:6px;border-radius:2px;"></span>Coerência ≥80%</span>
+          <span style="white-space:nowrap;"><span style="display:inline-block;background:#FFD43B;width:12px;height:12px;margin-right:6px;border-radius:2px;"></span>Coerência 51–79%</span>
+          <span style="white-space:nowrap;"><span style="display:inline-block;background:#8B1717;width:12px;height:12px;margin-right:6px;border-radius:2px;"></span>Coerência ≤50%</span>
+        </div>""",
+        unsafe_allow_html=True,
     )
     # Exibe os 31 nomes sem omissão automática, mantendo as barras na vertical.
     # A largura acompanha a quantidade de operadores e evita sobreposição.
@@ -228,14 +236,7 @@ if uploaded:
                     ],
                     range=["#159B54", "#F39C12", "#E53935", "#278BDE", "#FFD43B", "#8B1717"],
                 ),
-                legend=alt.Legend(
-                    title="Faixa de pontuação",
-                    orient="none",
-                    direction="horizontal",
-                    legendX=0,
-                    legendY=-35,
-                    columns=3,
-                ),
+                legend=None,
             ),
             tooltip=["Operador:N", "Indicador:N", alt.Tooltip("Pontuação (%):Q", format=".1f")],
         )
