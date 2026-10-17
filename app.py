@@ -181,40 +181,67 @@ if uploaded:
     st.subheader("Visão geral")
     st.dataframe(summary, use_container_width=True, hide_index=True)
 
-    # As notas e classificações permanecem intactas. Apenas as cores dos gráficos mudam.
-    # Qualquer indicador abaixo de 50% aparece em vermelho, independentemente do outro.
+    # Gráfico vertical: todos os nomes, com rolagem horizontal em telas estreitas.
+    # Nenhuma nota, classificação ou regra do motor de avaliação é modificada.
     chart_df = summary[["Operador", "Aderência (%)", "Coerência (%)"]].melt(
         id_vars="Operador",
         value_vars=["Aderência (%)", "Coerência (%)"],
         var_name="Indicador", value_name="Pontuação (%)",
     )
-    chart_df["Cor do gráfico"] = chart_df.apply(
-        lambda x: "Abaixo de 50%" if x["Pontuação (%)"] < 50
-        else ("Aderência (50% ou mais)" if x["Indicador"] == "Aderência (%)"
-              else "Coerência (50% ou mais)"), axis=1,
+    chart_df["Faixa de cor"] = chart_df["Pontuação (%)"].apply(
+        lambda value: "Vermelho (até 50%)" if value <= 50
+        else ("Laranja (acima de 50% e abaixo de 80%)" if value < 80
+              else "Verde (80% ou mais)")
     )
-    st.caption("Vermelho: resultado inferior a 50% em aderência ou coerência. "
-               "As notas e classificações originais não são modificadas.")
+    st.caption(
+        "Verde: 80% ou mais · Laranja: acima de 50% e abaixo de 80% · "
+        "Vermelho: 50% ou menos. Cada barra recebe a cor de sua própria pontuação. "
+        "Role horizontalmente para visualizar todos os operadores."
+    )
+    # Exibe os 31 nomes sem omissão automática, mantendo as barras na vertical.
+    # A largura acompanha a quantidade de operadores e evita sobreposição.
+    operator_order = list(dict.fromkeys(summary["Operador"].astype(str)))
+    chart_width = max(1000, len(operator_order) * 76)
     chart = (
         alt.Chart(chart_df)
         .mark_bar()
         .encode(
-            x=alt.X("Operador:N", title="Operador", sort=None, axis=alt.Axis(labelAngle=-55)),
+            x=alt.X(
+                "Operador:N", title="Operador", sort=operator_order,
+                axis=alt.Axis(
+                    labelAngle=-55, labelOverlap=False, labelLimit=250,
+                    labelFontSize=11, labelPadding=9,
+                ),
+            ),
             xOffset=alt.XOffset("Indicador:N", sort=["Aderência (%)", "Coerência (%)"]),
             y=alt.Y("Pontuação (%):Q", title="Pontuação (%)", scale=alt.Scale(domain=[0, 100])),
             color=alt.Color(
-                "Cor do gráfico:N",
+                "Faixa de cor:N",
                 scale=alt.Scale(
-                    domain=["Abaixo de 50%", "Aderência (50% ou mais)", "Coerência (50% ou mais)"],
-                    range=["#D83A3A", "#159B87", "#4D85C6"],
+                    domain=[
+                        "Verde (80% ou mais)",
+                        "Laranja (acima de 50% e abaixo de 80%)",
+                        "Vermelho (até 50%)",
+                    ],
+                    range=["#159B54", "#F39C12", "#D83A3A"],
                 ),
-                legend=alt.Legend(title="Legenda"),
+                legend=alt.Legend(title="Faixa de pontuação"),
             ),
             tooltip=["Operador:N", "Indicador:N", alt.Tooltip("Pontuação (%):Q", format=".1f")],
         )
-        .properties(height=360)
+        .properties(width=chart_width, height=380)
     )
-    st.altair_chart(chart, use_container_width=True)
+    # Permite rolagem dentro do componente, sem comprimir as colunas do gráfico.
+    st.markdown(
+        """<style>
+        div[data-testid="stVegaLiteChart"], div[data-testid="stAltairChart"] {
+            overflow-x: auto !important;
+            max-width: 100%;
+        }
+        </style>""",
+        unsafe_allow_html=True,
+    )
+    st.altair_chart(chart, use_container_width=False)
 
     csv = summary.to_csv(index=False).encode("utf-8-sig")
     st.download_button("Baixar resumo em CSV", csv, file_name="resumo_avaliacao_auto_drill.csv", mime="text/csv")
