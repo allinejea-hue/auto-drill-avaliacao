@@ -4,6 +4,7 @@ import re
 import hashlib
 import unicodedata
 import pandas as pd
+import altair as alt
 import streamlit as st
 from evaluation_engine import evaluate_operator, DEFAULT_WEIGHTS
 
@@ -180,8 +181,40 @@ if uploaded:
     st.subheader("Visão geral")
     st.dataframe(summary, use_container_width=True, hide_index=True)
 
-    chart_df = summary.set_index("Operador")[["Aderência (%)", "Coerência (%)"]]
-    st.bar_chart(chart_df, height=360)
+    # As notas e classificações permanecem intactas. Apenas as cores dos gráficos mudam.
+    # Qualquer indicador abaixo de 50% aparece em vermelho, independentemente do outro.
+    chart_df = summary[["Operador", "Aderência (%)", "Coerência (%)"]].melt(
+        id_vars="Operador",
+        value_vars=["Aderência (%)", "Coerência (%)"],
+        var_name="Indicador", value_name="Pontuação (%)",
+    )
+    chart_df["Cor do gráfico"] = chart_df.apply(
+        lambda x: "Abaixo de 50%" if x["Pontuação (%)"] < 50
+        else ("Aderência (50% ou mais)" if x["Indicador"] == "Aderência (%)"
+              else "Coerência (50% ou mais)"), axis=1,
+    )
+    st.caption("Vermelho: resultado inferior a 50% em aderência ou coerência. "
+               "As notas e classificações originais não são modificadas.")
+    chart = (
+        alt.Chart(chart_df)
+        .mark_bar()
+        .encode(
+            x=alt.X("Operador:N", title="Operador", sort=None, axis=alt.Axis(labelAngle=-55)),
+            xOffset=alt.XOffset("Indicador:N", sort=["Aderência (%)", "Coerência (%)"]),
+            y=alt.Y("Pontuação (%):Q", title="Pontuação (%)", scale=alt.Scale(domain=[0, 100])),
+            color=alt.Color(
+                "Cor do gráfico:N",
+                scale=alt.Scale(
+                    domain=["Abaixo de 50%", "Aderência (50% ou mais)", "Coerência (50% ou mais)"],
+                    range=["#D83A3A", "#159B87", "#4D85C6"],
+                ),
+                legend=alt.Legend(title="Legenda"),
+            ),
+            tooltip=["Operador:N", "Indicador:N", alt.Tooltip("Pontuação (%):Q", format=".1f")],
+        )
+        .properties(height=360)
+    )
+    st.altair_chart(chart, use_container_width=True)
 
     csv = summary.to_csv(index=False).encode("utf-8-sig")
     st.download_button("Baixar resumo em CSV", csv, file_name="resumo_avaliacao_auto_drill.csv", mime="text/csv")
