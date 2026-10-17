@@ -188,14 +188,18 @@ if uploaded:
         value_vars=["Aderência (%)", "Coerência (%)"],
         var_name="Indicador", value_name="Pontuação (%)",
     )
-    chart_df["Faixa de cor"] = chart_df["Pontuação (%)"].apply(
-        lambda value: "Vermelho (até 50%)" if value <= 50
-        else ("Laranja (acima de 50% e abaixo de 80%)" if value < 80
-              else "Verde (80% ou mais)")
+    # As cores são determinadas por indicador e faixa, sem modificar as notas.
+    def cor_indicador(indicador, valor):
+        if indicador == "Aderência (%)":
+            return "Aderência · Verde" if valor >= 80 else ("Aderência · Laranja" if valor > 50 else "Aderência · Vermelho")
+        return "Coerência · Azul" if valor >= 80 else ("Coerência · Amarelo" if valor > 50 else "Coerência · Vermelho escuro")
+
+    chart_df["Faixa de cor"] = chart_df.apply(
+        lambda linha: cor_indicador(linha["Indicador"], linha["Pontuação (%)"]), axis=1
     )
     st.caption(
-        "Verde: 80% ou mais · Laranja: acima de 50% e abaixo de 80% · "
-        "Vermelho: 50% ou menos. Cada barra recebe a cor de sua própria pontuação. "
+        "Aderência: verde ≥80%, laranja >50% e <80%, vermelho ≤50%. "
+        "Coerência: azul ≥80%, amarelo >50% e <80%, vermelho-escuro ≤50%. "
         "Role horizontalmente para visualizar todos os operadores."
     )
     # Exibe os 31 nomes sem omissão automática, mantendo as barras na vertical.
@@ -219,17 +223,23 @@ if uploaded:
                 "Faixa de cor:N",
                 scale=alt.Scale(
                     domain=[
-                        "Verde (80% ou mais)",
-                        "Laranja (acima de 50% e abaixo de 80%)",
-                        "Vermelho (até 50%)",
+                        "Aderência · Verde", "Aderência · Laranja", "Aderência · Vermelho",
+                        "Coerência · Azul", "Coerência · Amarelo", "Coerência · Vermelho escuro",
                     ],
-                    range=["#159B54", "#F39C12", "#D83A3A"],
+                    range=["#159B54", "#F39C12", "#E53935", "#278BDE", "#FFD43B", "#8B1717"],
                 ),
-                legend=alt.Legend(title="Faixa de pontuação"),
+                legend=alt.Legend(
+                    title="Faixa de pontuação",
+                    orient="none",
+                    direction="horizontal",
+                    legendX=0,
+                    legendY=-35,
+                    columns=3,
+                ),
             ),
             tooltip=["Operador:N", "Indicador:N", alt.Tooltip("Pontuação (%):Q", format=".1f")],
         )
-        .properties(width=chart_width, height=380)
+        .properties(width=chart_width, height=400)
     )
     # Permite rolagem dentro do componente, sem comprimir as colunas do gráfico.
     st.markdown(
