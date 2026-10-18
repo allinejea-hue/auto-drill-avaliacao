@@ -1,4 +1,5 @@
-"""Motor de avaliação MD6310. Revisão dos critérios Q9, Q12, Q14 e Q15.
+"""VERSÃO DE TESTE — não substituir o motor oficial sem aprovação.
+Motor de avaliação MD6310. Revisão dos critérios Q9, Q12, Q14 e Q15.
 Mantém interface e pesos do aplicativo original; interpretação por regras auditáveis,
 não por IA semântica. Respostas ambíguas exigem revisão humana.
 """
@@ -199,6 +200,32 @@ def evaluate_q9_technical(answer: str) -> Finding:
     if not a:
         return Finding(area, 'alta', 'Resposta ausente',
                        'Não foi possível verificar conhecimento aplicado.', 0, 2)
+
+    # AUDITORIA EXPERIMENTAL (Q9): reconhecer decisões descritas em linguagem natural.
+    # Correções conservadoras: não supõe que intervenção manual = continuar perfurando.
+    # O critério se refere ao desvio; desagarramento isolado não comprova decisão
+    # completa diante de desvio confirmado (máximo 1/2 neste caso).
+    desagarrar = bool(re.search(r'desagarr\w*|soltar a haste|liberar a haste', a))
+    manual_para_recuperacao = bool(re.search(r'manual.{0,55}desagarr|desagarr.{0,55}manual', a))
+    if desagarrar and manual_para_recuperacao and not re.search(r'continu\w*.{0,30}perfur\w*', a):
+        return Finding(area, 'media', 'Intervenção manual de recuperação, não continuação',
+            'Descreve intervenção manual para desagarrar e retornar ao automático; não esclarece a decisão perante desvio confirmado.', 1, 2)
+
+    # Abandono explícito independe de grafia perfeita ou de explicar entrega do controle.
+    abandono_explicito = bool(re.search(r'(?:abandon\w*|abandonad\w*|novo furo|outro furo)', a))
+    interrupcao_explicita = bool(re.search(r'interromp\w*|enterrop\w*|enterromp\w*|par\w*|suspend\w*|reinici\w*', a))
+    if abandono_explicito and interrupcao_explicita and not re.search(r'continu\w*.{0,30}perfur\w*.{0,40}(?:no manual|manualmente)', a):
+        # Se uma recuperação do MESMO furo for cogitada, intenção ainda é ambígua.
+        if re.search(r'recuperar o furo|recuperacao do furo|tem como recuperar', a):
+            return Finding(area, 'media', 'Decisão parcialmente definida',
+                'Considera recuperar o furo e, se inviável, iniciar outro; não esclarece conduta diante do desvio confirmado.', 1, 2)
+        return Finding(area, 'nenhuma', 'Interrupção e abandono explícitos',
+            'Indica interromper e abandonar o furo; não afirma continuar perfurando em desvio confirmado.', 2, 2)
+
+    # Rejeição explícita de seguir perfurando furo comprovadamente desviado.
+    if re.search(r'(?:nao deve|nao posso|nao se deve|nunca deve|evitar|evitando)\s*(?:forcar.{0,65})?(?:continu\w*|perfur\w*)', a) and re.search(r'desvi', a):
+        return Finding(area, 'media', 'Não continuar diante de desvio confirmado',
+            'Reconhece a necessidade de interromper; não indica de forma completa a decisão de abandono/refazimento.', 1, 2)
 
     # Frases afirmativas de CONTINUAR PERFURANDO NO MANUAL diante do desvio.
     # O sistema apenas "entregar para manual" não constitui essa decisão.
