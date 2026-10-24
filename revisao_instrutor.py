@@ -152,13 +152,13 @@ def apply_reviews(record, automatic, decisions, classify_recognition,
     pending = [q for q, item in items.items() if item['pending'] and q not in decisions]
     result['revisoes_pendentes'] = pending
     result['situacao_nota'] = 'Provisória — revisão pendente' if pending else 'Sem revisão técnica pendente'
-    if pending:
-        reason = 'Revisão do instrutor pendente: ' + ', '.join(q.upper() for q in pending) + '.'
-        result['pendencias_reconhecimento'] = list(result['pendencias_reconhecimento']) + [reason]
-        result['motivos_reconhecimento'] = [s for s in result['motivos_reconhecimento']
-            if not s.startswith('Aderência e coerência ≥80%')] + [reason]
-        if result['classificacao_reconhecimento'] == 'Elegível para reconhecimento':
-            result['classificacao_reconhecimento'] = 'Precisa de validação'
-            result['consistencia_respostas'] = 'Validação pendente'
+    # Pendência sinaliza revisão, sem retirar quem atingiu a média da tabela.
+    result['atingiu_media'] = result['aderencia'] >= 80 and result['coerencia'] >= 80
     result['revisoes_instrutor'] = copy.deepcopy(decisions)
     return result
+
+
+def review_items(evaluation, record, decisions):
+    """Apenas respostas ambíguas e correções já registradas, para permitir retificação."""
+    return {q: item for q, item in technical_items(evaluation, record).items()
+            if item['pending'] or q in decisions}

@@ -6,7 +6,7 @@ from pathlib import Path
 import streamlit as st
 import evaluation_engine
 from revisao_instrutor import (ReviewStore, verify_password, scope_id, record_id,
-    latest_decisions, technical_items, TARGETS)
+    latest_decisions, review_items, TARGETS)
 
 
 def setup_review():
@@ -76,10 +76,12 @@ def render_review(record, automatic, result, store, scope, user):
         return
     rid = record_id(record)
     decisions = result['revisoes_instrutor']
-    items = technical_items(automatic, record)
+    items = review_items(automatic, record, decisions)
     if result['revisoes_pendentes']:
         st.warning('Nota provisória. Aguardando revisão: ' + ', '.join(q.upper() for q in result['revisoes_pendentes']))
-    st.caption('Certo atribui o máximo do critério; Errado atribui zero. Preferências e sugestões sem pontuação não são corrigidas aqui. Os cruzamentos entre respostas continuam independentes.')
+    if not items:
+        st.info('Este operador não tem respostas técnicas encaminhadas para revisão.')
+    st.caption('Somente respostas encaminhadas para revisão e correções já registradas aparecem aqui. Certo atribui o máximo do critério; Errado atribui zero. Preferências e sugestões sem pontuação não são corrigidas aqui. Os cruzamentos entre respostas continuam independentes.')
     for q, item in items.items():
         event = decisions.get(q)
         with st.expander(f'{q.upper()} — {TARGETS[q]}' + (' — pendente' if q in result['revisoes_pendentes'] else '')):

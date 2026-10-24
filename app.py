@@ -181,6 +181,7 @@ if uploaded:
     summary = pd.DataFrame([
         {
             "Operador": r["nome"],
+            "Atingiu a média": "Sim" if r["atingiu_media"] else "Não",
             "Situação da nota": r["situacao_nota"],
             "Revisões pendentes": ", ".join(r["revisoes_pendentes"]),
             "Aderência (%)": r["aderencia"],
@@ -188,7 +189,7 @@ if uploaded:
             "Coerência (%)": r["coerencia"],
             "Classificação coerência": r["classificacao_coerencia"],
             "Consistência das respostas": r["consistencia_respostas"],
-            "Reconhecimento": r["classificacao_reconhecimento"],
+            "Diagnóstico técnico do motor": r["classificacao_reconhecimento"],
             "Motivos": " | ".join(r["motivos_reconhecimento"]),
         }
         for r in results
@@ -273,19 +274,20 @@ if uploaded:
     csv = summary.to_csv(index=False).encode("utf-8-sig")
     st.download_button("Baixar resumo em CSV", csv, file_name="resumo_avaliacao_auto_drill.csv", mime="text/csv")
 
-    st.subheader("Classificação para reconhecimento")
-    st.caption("Critério: aderência e coerência de pelo menos 80%, sem contradições relevantes, lacunas técnicas graves ou respostas essenciais pendentes. Não comprova aplicação em campo. A lista não é completada para atingir uma quantidade fixa.")
-    counts = summary["Reconhecimento"].value_counts()
-    for status in ("Elegível para reconhecimento", "Precisa de validação", "Não elegível nesta avaliação"):
-        st.write(f"{status}: {counts.get(status, 0)}")
-    eligible = summary[summary["Reconhecimento"] == "Elegível para reconhecimento"].sort_values(
-        ["Coerência (%)", "Aderência (%)"], ascending=False)
+    st.subheader("Elegíveis pela média — aderência e coerência ≥80%")
+    st.caption("A tabela inclui todos os operadores com pelo menos 80% nos dois indicadores, inclusive quem possui respostas em revisão. A situação da nota e os alertas técnicos continuam visíveis; atingir a média não confirma aplicação em campo.")
+    eligible = summary[
+        (summary["Aderência (%)"] >= 80) & (summary["Coerência (%)"] >= 80)
+    ].sort_values(["Coerência (%)", "Aderência (%)"], ascending=False)
+    st.write(f"Elegíveis pela média: {len(eligible)}")
+    st.write(f"Abaixo da média em pelo menos um indicador: {len(summary) - len(eligible)}")
+    st.write(f"Operadores com respostas pendentes de revisão: {sum(bool(r['revisoes_pendentes']) for r in results)}")
     if eligible.empty:
-        st.info("Nenhum operador atende a todos os critérios nesta avaliação.")
+        st.info("Nenhum operador atingiu pelo menos 80% em aderência e coerência nesta avaliação.")
     else:
         st.dataframe(eligible, use_container_width=True, hide_index=True)
-    st.download_button("Baixar elegíveis em CSV", eligible.to_csv(index=False).encode("utf-8-sig"),
-                       file_name="elegiveis_reconhecimento_auto_drill.csv", mime="text/csv")
+    st.download_button("Baixar elegíveis pela média em CSV", eligible.to_csv(index=False).encode("utf-8-sig"),
+                       file_name="elegiveis_pela_media_auto_drill.csv", mime="text/csv")
 
     # Ranking complementar: os oito menores resultados de aderência.
     # Não modifica notas, regras de coerência nem elegibilidade para reconhecimento.
@@ -321,7 +323,8 @@ if uploaded:
     r = results[selected]
     render_review(r["_record"], r["_automatic"], r, review_store, review_scope, review_user)
 
-    st.subheader("Resultado para reconhecimento")
+    st.subheader("Diagnóstico técnico e pendências")
+    st.write("Atingiu a média: " + ("Sim" if r["atingiu_media"] else "Não"))
     st.write(r["classificacao_reconhecimento"])
     st.write(r["consistencia_respostas"])
     for reason in r["motivos_reconhecimento"]:
