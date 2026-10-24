@@ -93,6 +93,17 @@ def record_from_row(row, mapping):
         out[k] = "" if c is None or pd.isna(row.get(c, "")) else str(row.get(c, ""))
     return out
 
+area_do_app = st.sidebar.radio("Área do aplicativo", ["Avaliação Auto Drill", "Biblioteca de materiais"], key="app_area")
+if area_do_app == "Biblioteca de materiais":
+    setup_review()  # Reutiliza o login de instrutor sem trocar senhas nem configurações.
+    try:
+        from interface_biblioteca import render_library
+    except ImportError:
+        st.error("Biblioteca indisponível. Confira os arquivos e as dependências da atualização.")
+    else:
+        render_library()
+    st.stop()
+
 with st.sidebar:
     st.header("Configuração")
     st.write("Os pesos de aderência podem ser ajustados sem alterar o motor de coerência.")
